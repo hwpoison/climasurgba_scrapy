@@ -104,14 +104,12 @@ def makeAnimation(folder, resolution=(594, 824), format='mp4', fps=15):
 	imageio.mimwrite(f'{folder}/video.{format}', images, fps=fps)
 	print('[+]Animation generated.')
 
-
-getFullMonth(1)
-
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description=__description__)
 	parser.add_argument('-t', '--today', help='Obtener y descargar imagenes del día.', action='store_true')
 	parser.add_argument('-a', '--animate', help='Generar animación de una carpeta especifica.', type=str, nargs=1)
 	parser.add_argument('-d', '--download', help='Descargar las imagenes de un día en especifico (AÑO/MES/DÍA)', type=str, nargs=1)
+	parser.add_argument('-m', '--month', help='Descarga las imagenes de un mes entero en especifico', type=int, nargs=1)
 	args = parser.parse_args()
 
 	if args.today:
@@ -120,3 +118,5 @@ if __name__ == '__main__':
 		makeAnimation(args.animate[0])
 	if args.download:
 		getDayImage(date=args.download[0])
+	if args.month:
+		getFullMonth(month=args.month[0])
