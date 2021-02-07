@@ -2,6 +2,7 @@ import os
 import requests
 import threading
 from threading import Thread
+import time
 
 __author__ = 'hwpoison'
 
@@ -9,11 +10,15 @@ __author__ = 'hwpoison'
 class ThreadPoolManager():
 	def __init__(self):
 		self.max_threads = False
+		self.auto_start = False
+		self.delay = False
 		self.futures = []
 
 	def addThread(self, name_, target_, args_):
 		new_thread = Thread(name=name_, target=target_, args=args_)
 		self.futures.append(new_thread)
+		if self.auto_start:
+			self.new_thread.start()
 
 	def checkActives(self):
 		if actives:=threading.active_count() > 1:
@@ -27,8 +32,10 @@ class ThreadPoolManager():
 				thread.start()
 		else:
 			while self.futures: # mientras haya hilos por ejecutar
-				if self.checkActives() < self.max_threads:  # si los hilos actuales son menores la maximo
-					for nthread, thread in enumerate(self.futures): #iniciar los suficientes 
+				if self.delay:
+					time.sleep(self.delay)
+				for nthread, thread in enumerate(self.futures): #iniciar los suficientes 
+					if self.checkActives() < self.max_threads: # si los hilos actuales son menores la maximo
 						self.futures.pop(nthread).start() # se extrae e inicializa
 
 	def block(self):
@@ -40,12 +47,13 @@ class ThreadPoolManager():
 
 # Gestor de descargas multi hilo
 class DownloadManager(ThreadPoolManager):
-	def __init__(self, max_downloads=False):
+	def __init__(self, simul_limit=False, delay=False):
 		super().__init__()
 		self.total_files = 0
 		self.total_downloaded = 0
 		self.omitteds = 0
-		self.max_threads = max_downloads
+		self.max_threads = simul_limit
+		self.delay = delay
 
 	def downloadFile(self, link, location):
 		if os.path.exists(location):
