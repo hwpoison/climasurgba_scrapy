@@ -45,7 +45,7 @@ def getFullMonth(month, year=2021):
 		month_images.update(day_imgs)
 
 	folder_name = f'month_{month}_{year}'
-	downloadImages((folder_name, month_images), download_limit=4)
+	downloadImages((folder_name, month_images), simul_limit=5, delay=30)
 	makeAnimation(folder_name, fps=30)
 
 def getDayImage(date=ACTUAL_DATE):
@@ -53,7 +53,7 @@ def getDayImage(date=ACTUAL_DATE):
 	images = scrapImages(date)
 	if images:
 		print('[+]Preparing for download.')
-		download = downloadImages(images)
+		download = downloadImages(images, simul_limit=3)
 		print('[+]Generating animation.')
 		animation = makeAnimation(date, fps=12);
 		print("[+]Finished.")
@@ -62,7 +62,7 @@ def getDayImage(date=ACTUAL_DATE):
 		print("[x]Error to download! (No data found?).")
 		return False
 
-def downloadImages(images, folder_name=None, download_limit=None):
+def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
 	date = images[0]
 	images = images[1]
 	total_images = len(images)
@@ -72,7 +72,7 @@ def downloadImages(images, folder_name=None, download_limit=None):
 		if not os.path.exists(folder_name):
 			os.mkdir(folder_name)
 
-	download_manager = DownloadManager(max_downloads=download_limit)	
+	download_manager = DownloadManager(max_downloads=simul_limit, delay=delay)	
 
 	for hour in images:
 		download_url = URL_BASE + images[hour]
