@@ -1,126 +1,81 @@
 import os
-import re
-import time
-import argparse
-from calendar import monthrange
-
-
-import imageio
 import requests
-from PIL import Image
-from bs4 import BeautifulSoup
-from utils import DownloadManager
+import threading
+from threading import Thread
+import time
 
-__author__ = "hwpoison"
-__description__ = """
-Obtener imagenes en infrarrojos del satelite metereologico GOES-16 \
-haciendo scrapping al sitio climasurgba.com.ar
-"""
+__author__ = 'hwpoison'
 
-URL_BASE = "https://climasurgba.com.ar"
-URI_HISTORIAL = "/satelite/goes-topes-nubosos/historial/" 
-ACTUAL_DATE = time.strftime("%Y/%m/%d")
+# Mini gestor de hilos
+class ThreadPoolManager():
+	def __init__(self):
+		self.max_threads = False
+		self.auto_start = False
+		self.delay = 1
+		self.futures = []
 
-def scrapImages(date): # YYYY/M/D	
-	images = {}
-	url = URL_BASE + URI_HISTORIAL + date
-	print('[+]Scraping images from:', url)
-	html = BeautifulSoup(requests.get(url).text, 'html.parser')
-	for link in html.find_all(href=re.compile("satelite/historial")):
-		if image_link:=link.get('href'):
-			images[link.text] = image_link
-	if not images:
-		print("[x]Not found.")
-		return False
+	def addThread(self, name_, target_, args_):
+		new_thread = Thread(name=name_, target=target_, args=args_)
+		self.futures.append(new_thread)
+		if self.auto_start:
+			self.new_thread.start()
 
-	return date, images
+	def getActives(self):
+		if (actives:=threading.active_count()-1):
+			return actives
+		else:
+			return 0
 
-def getFullMonth(month, year=2021):
-	month_images = {}
-	num_days = range(1, monthrange(year, month)[1]+1)
-	print('[+]Collecting images...')
-	for day in num_days:
-		day_imgs = scrapImages(f'{year}/{month}/{day}')[1]
-		day_imgs = { f'{day}_{hour}':day_imgs[hour] for hour in day_imgs }
-		month_images.update(day_imgs)
-
-	folder_name = f'month_{month}_{year}'
-	downloadImages((folder_name, month_images), simul_limit=5, delay=30)
-	makeAnimation(folder_name, fps=30)
-
-def getDayImage(date=ACTUAL_DATE, delay=False):
-	print('[+]Getting images of the actual day.')
-	images = scrapImages(date)
-	if images:
-		print('[+]Preparing for download.')
-		download = downloadImages(images, simul_limit=3, delay=delay)
-		print('[+]Generating animation.')
-		animation = makeAnimation(date.replace('/','-'), fps=12);
-		print("[+]Finished.")
+	def startThreads(self):
+		if not self.max_threads: 
+			for thread in self.futures: #ejecuta todos los hilos disponibles
+				thread.start()
+		else:
+			while self.futures: # mientras haya hilos por ejecutar	
+				if self.delay:
+					time.sleep(self.delay)
+				for nthread, thread in enumerate(self.futures): #iniciar los suficientes 
+					if self.getActives() <= self.max_threads: # si los hilos actuales son menores la maximo
+						self.futures.pop(nthread).start() # se extrae e inicializa
+	def block(self):
+		#while threading.active_count() > 1:
+		while self.getActives():
+			# bloquea el hilo principal hasta que finalice todo
+			pass
 		return True
-	else:
-		print("[x]Error to download! (No data found?).")
-		return False
 
-def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
-	date = images[0]
-	images = images[1]
-	total_images = len(images)
-	start = time.time()
-	if not folder_name:
-		folder_name = date.replace('/', '-')
-		if not os.path.exists(folder_name):
-			os.mkdir(folder_name)
+# Gestor de descargas multi hilo
+class DownloadManager(ThreadPoolManager):
+	def __init__(self, simul_limit=False, delay=False):
+		super().__init__()
+		self.total_files = 0
+		self.total_downloaded = 0
+		self.omitteds = 0
+		self.max_threads = simul_limit
+		self.delay = delay
 
-	download_manager = DownloadManager(simul_limit=simul_limit, delay=delay)	
+	def downloadFile(self, link, location):
+		if os.path.exists(location):
+			#print(f"[!]{location} already exists!\n")
+			self.total_files-=1
+			self.omitteds+=1
+			return False
 
-	for hour in images:
-		download_url = URL_BASE + images[hour]
-		file_name = f"{hour.replace(':','-')}_{images[hour][-4:]}"
-		full_path = f"{folder_name}/{file_name}.jpg"
-		download_manager.addDownload(download_url, full_path)
+		requestUrl = requests.get(link, stream=True)
+		with open(location, 'wb') as f:
+			for chunk in requestUrl.iter_content(1024):
+				if chunk:
+					f.write(chunk)
+		self.total_downloaded+=1
+		print(f'[+]{location} downloaded. {self.total_downloaded} of {self.total_files} ({self.omitteds} omitteds)')
+		return True
 
-	print('[+]Download started, waiting.')
-	print(f'[+]{download_manager.total_files} images added to download.')
-	download_manager.startDownloads()
-	download_manager.isDone()
-	print(f'[+]Finished in. {time.time()-start:.2f}')
-	return True
+	def addDownload(self, link, location):
+		self.addThread("",  target_=self.downloadFile, args_=(link, location))
+		self.total_files+=1
 
-def makeAnimation(folders, resolution=(594, 824), format='mp4', fps=15):
-	if not [os.path.exists(p) for p in folders]:
-		print('[-]Path does not exist')
-	image_files = []
-	for folder in folders:
-		paths = [f'{folder}/{file}' for file in os.listdir(folder)]
-		image_files.extend(paths)
-	
-	print('[+]Loading and preparing images.')
-	images = []
-	for image_file in image_files:
-		if image_file.endswith('.jpg'):
-			try:
-				images.append(Image.open(image_file).resize(resolution))
-			except Exception as error:
-				print('[x]Error to read ', image_file, error)
-	
-	print(f'[+]{len(images)} images.')
-	imageio.mimwrite(f'{folder}/video.{format}', images, fps=fps)
-	print('[+]Animation generated.')
+	def startDownloads(self):
+		self.startThreads()
 
-if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description=__description__)
-	parser.add_argument('-t', '--today', help='Obtener y descargar imagenes del día.', action='store_true')
-	parser.add_argument('-a', '--animate', help='Generar animación de una carpeta especifica.', type=str, nargs=1)
-	parser.add_argument('-d', '--download', help='Descargar las imagenes de un día en especifico (AÑO/MES/DÍA)', type=str, nargs=1)
-	parser.add_argument('-m', '--month', help='Descarga las imagenes de un mes entero en especifico', type=int, nargs=1)
-	args = parser.parse_args()
-
-	if args.today:
-		getDayImage()
-	if args.animate:
-		makeAnimation(args.animate[0])
-	if args.download:
-		getDayImage(date=args.download[0])
-	if args.month:
-		getFullMonth(month=args.month[0])
+	def isDone(self):
+		return self.block()
