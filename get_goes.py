@@ -48,14 +48,14 @@ def getFullMonth(month, year=2021):
 	downloadImages((folder_name, month_images), simul_limit=5, delay=30)
 	makeAnimation(folder_name, fps=30)
 
-def getDayImage(date=ACTUAL_DATE):
+def getDayImage(date=ACTUAL_DATE, delay=False):
 	print('[+]Getting images of the actual day.')
 	images = scrapImages(date)
 	if images:
 		print('[+]Preparing for download.')
-		download = downloadImages(images, simul_limit=3)
+		download = downloadImages(images, simul_limit=3, delay=delay)
 		print('[+]Generating animation.')
-		animation = makeAnimation(date, fps=12);
+		animation = makeAnimation(date.replace('/','-'), fps=12);
 		print("[+]Finished.")
 		return True
 	else:
@@ -66,41 +66,45 @@ def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
 	date = images[0]
 	images = images[1]
 	total_images = len(images)
-
+	start = time.time()
 	if not folder_name:
 		folder_name = date.replace('/', '-')
 		if not os.path.exists(folder_name):
 			os.mkdir(folder_name)
 
-	download_manager = DownloadManager(max_downloads=simul_limit, delay=delay)	
+	download_manager = DownloadManager(simul_limit=simul_limit, delay=delay)	
 
 	for hour in images:
 		download_url = URL_BASE + images[hour]
-		file_name = hour.replace(':','-')
+		file_name = f"{hour.replace(':','-')}_{images[hour][-4:]}"
 		full_path = f"{folder_name}/{file_name}.jpg"
-
 		download_manager.addDownload(download_url, full_path)
 
-	download_manager.startDownloads()
-	print(f'[+]{download_manager.total_files} images added to download.')
 	print('[+]Download started, waiting.')
+	print(f'[+]{download_manager.total_files} images added to download.')
+	download_manager.startDownloads()
 	download_manager.isDone()
-	print('[+]Finished.')
+	print(f'[+]Finished in. {time.time()-start:.2f}')
 	return True
 
-def makeAnimation(folder, resolution=(594, 824), format='mp4', fps=15):
-	folder = folder.replace('/', '-')
-	if not os.path.exists(folder):
+def makeAnimation(folders, resolution=(594, 824), format='mp4', fps=15):
+	if not [os.path.exists(p) for p in folders]:
 		print('[-]Path does not exist')
-	files = [f"{folder}/{file}" for file in os.listdir(folder)]
-	images = []
+	image_files = []
+	for folder in folders:
+		paths = [f'{folder}/{file}' for file in os.listdir(folder)]
+		image_files.extend(paths)
+	
 	print('[+]Loading and preparing images.')
-	for image_file in files:
+	images = []
+	for image_file in image_files:
 		if image_file.endswith('.jpg'):
 			try:
 				images.append(Image.open(image_file).resize(resolution))
 			except Exception as error:
 				print('[x]Error to read ', image_file, error)
+	
+	print(f'[+]{len(images)} images.')
 	imageio.mimwrite(f'{folder}/video.{format}', images, fps=fps)
 	print('[+]Animation generated.')
 
