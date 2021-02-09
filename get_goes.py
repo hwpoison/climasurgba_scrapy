@@ -55,7 +55,7 @@ def getDayImage(date=ACTUAL_DATE, delay=False):
 		print('[+]Preparing for download.')
 		download = downloadImages(images, simul_limit=3, delay=delay)
 		print('[+]Generating animation.')
-		animation = makeAnimation(date.replace('/','-'), fps=12);
+		animation = makeAnimation(date, fps=12);
 		print("[+]Finished.")
 		return True
 	else:
