@@ -55,7 +55,7 @@ def getDayImage(date=ACTUAL_DATE, delay=False):
 		print('[+]Preparing for download.')
 		download = downloadImages(images, simul_limit=3, delay=delay)
 		print('[+]Generating animation.')
-		animation = makeAnimation(date, fps=12);
+		animation = makeAnimation([date], fps=12);
 		print("[+]Finished.")
 		return True
 	else:
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 	if args.today:
 		getDayImage()
 	if args.animate:
-		makeAnimation(args.animate[0])
+		makeAnimation([args.animate[0]])
 	if args.download:
 		getDayImage(date=args.download[0])
 	if args.month:
