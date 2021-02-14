@@ -4,11 +4,12 @@ Script para extraer imágenes infrarrojos del satélite GOES-16 del territorio a
 Se puede usar por linea de comandos.
 
 Uso:
-
+ - **python get_goes.py --help**  : obtener ayuda.
  - **python get_goes.py -t**  : obtener las imagenes disponibles hasta el momento del día y luego se crea una animación con ellas.
    
     **python get_goes.py -a [Nombre carpeta]** : crear una animación con
-   las imagenes en la carpeta.  
+   las imagenes de una carpeta, admite varias a la vez separadas por una coma para poder animar mas de un día, por ejemplo: --animate 2021-02-01,2021-02-02
+   
    **python get_goes.py -d AÑO/MES/DÍA** : descargar las imagenes disponibles de un día en especifico (El sitio climasurgba guarda
    hasta 5 meses).
    
