@@ -126,7 +126,7 @@ def makeAnimation(folders, resolution=(608, 832), format='mp4', fps=DEFAULT_FPS)
                 date_text = image_file.split('_')
                 #draw
                 date_text = f'{date_text[4]}/{date_text[1]} {date_text[5]}:00hs'
-                draw.rectangle(((0,0),(175,40)), fill ="#000000", outline ="red") 
+                draw.rectangle(((0,0),(210, 40)), fill ="#000000", outline ="red") 
                 draw.text((10,0), date_text, (255,255,255), font=font)
                 #add 
                 images.append(image_loaded)
