@@ -6,6 +6,11 @@ import time
 
 __author__ = 'hwpoison'
 
+default_headers = {
+    'Content-Type': 'text/html',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0'
+}
+
 # Mini gestor de hilos
 class ThreadPoolManager():
 	def __init__(self):
@@ -61,7 +66,7 @@ class DownloadManager(ThreadPoolManager):
 			self.omitteds+=1
 			return False
 
-		requestUrl = requests.get(link, stream=True)
+		requestUrl = requests.get(link, headers=default_headers, stream=True)
 		with open(location, 'wb') as f:
 			for chunk in requestUrl.iter_content(1024):
 				if chunk:

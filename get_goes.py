@@ -13,7 +13,7 @@ from PIL import ImageFont
 from PIL import ImageDraw
 from bs4 import BeautifulSoup
 
-from utils import DownloadManager
+from utils import DownloadManager, default_headers
 
 __author__ = "hwpoison"
 __description__ = """
@@ -27,6 +27,12 @@ URI_HISTORIAL = "/satelite/goes-topes-nubosos/historial/"
 TODAY_DATE = datetime.now()
 TODAY_DATE_STR = TODAY_DATE.strftime("%Y/%m/%d")
 DEFAULT_FPS = 12 # default fps
+SIMUL_LIMIT = 25
+ALL_RESOLUTIONS = {
+    'hd':(720, 1040),
+    'fullhd':(1488, 2064)
+}
+CHOICED_RESOLUTION = 'hd'
 
 if os.sys.platform == 'linux':
     FONT_DIR = '/usr/share/fonts/TTF/Inconsolata-Bold.ttf'
@@ -45,7 +51,11 @@ def getImageUrls(date): # YYYY/M/D
     images = {}
     url = URL_BASE + URI_HISTORIAL + date
     print('[+]Scraping images from:', url)
-    html = BeautifulSoup(requests.get(url).text, 'html.parser')
+    headers = {
+            'Content-Type': 'text/html',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0'
+    }
+    html = BeautifulSoup(requests.get(url, headers=default_headers).text, 'html.parser')
     for link in html.find_all(href=re.compile("satelite/historial")):
         if image_link:=link.get('href'):
             images[date + '_' + link.text] = image_link
@@ -71,6 +81,7 @@ def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
         download_url = URL_BASE + images[name]
         file_name = parseDate(name)
         full_path = f"{folder_name}/{file_name}.jpg"
+        print("Trying to download ", download_url)
         download_manager.addDownload(download_url, full_path)
 
     print('[+]Download started, waiting.')
@@ -81,7 +92,7 @@ def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
     return True
 
 # animate images from folder
-def animate(folders, resolution=(608, 832), format='mp4', fps=DEFAULT_FPS):
+def animate(folders, resolution, format='mp4', fps=DEFAULT_FPS):
     folders = [parseDate(fname) for fname in folders]
     if not [os.path.exists(f) for f in folders]:
         print('[-]Path does not exist')
@@ -95,9 +106,9 @@ def animate(folders, resolution=(608, 832), format='mp4', fps=DEFAULT_FPS):
     for image_file in image_files:
         if image_file.endswith('.jpg'):
             try:
-                #load images
+                #load and resize images
                 image_loaded = Image.open(image_file)
-                image_loaded = image_loaded.resize(resolution)
+                image_loaded = image_loaded.resize(ALL_RESOLUTIONS[resolution])
                 #load font
                 font = ImageFont.truetype(FONT_DIR, 25)
                 draw = ImageDraw.Draw(image_loaded)
@@ -124,9 +135,9 @@ def getAndAnimateDay(date=TODAY_DATE_STR , delay=False):
     images = getImageUrls(date)
     if images:
         print('[+]Preparing for download.')
-        download = downloadImages(images, simul_limit=3, delay=delay)
+        download = downloadImages(images, simul_limit=SIMUL_LIMIT, delay=delay)
         print('[+]Downloaded, now generating animation.')
-        animation = animate([date], fps=DEFAULT_FPS);
+        animation = animate([date], resolution=CHOICED_RESOLUTION, fps=DEFAULT_FPS);
         print("[+]Finished.")
         return animation
     else:
@@ -144,7 +155,7 @@ def getAndAnimateFullMonth(month, year=2021):
         month_images.update(day_imgs)
 
     folder_name = f'month_{month}_{year}'
-    downloadImages((folder_name, month_images), simul_limit=5, delay=30)
+    downloadImages((folder_name, month_images), simul_limit=SIMUL_LIMIT, delay=30)
     animate(folder_name, fps=DEFAULT_FPS)
 
 def getAndAnimateFromYesterday():
@@ -158,7 +169,7 @@ def getAndAnimateFromYesterday():
     # download
     folder_name = yesterday_str+'_to_'+TODAY_DATE_STR
     print(images)
-    downloadImages((folder_name, images), simul_limit=5)
+    downloadImages((folder_name, images), simul_limit=SIMUL_LIMIT)
     # animate
     animation_path = animate([folder_name], fps=DEFAULT_FPS)
     return animation_path
@@ -172,6 +183,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--month', help='Descarga las imagenes de un mes entero en especifico.', type=int, nargs=1)
     parser.add_argument('--fps', help='Especificar los fps de la animación.', type=int, nargs=1)
     parser.add_argument('-o', '--visualize', help='visualiza el video luego de generarlo.', action='store_true')
+    parser.add_argument('-q', '--quality', help='Resolución de animación. (hd, fullhd)', type=str, nargs=1)
     args = parser.parse_args()
 
     if args.fps:
@@ -182,6 +194,9 @@ if __name__ == '__main__':
         animation_path = getAndAnimateFromYesterday()
     if args.animate:
         animation_path = animate(args.animate[0].split(','), fps=DEFAULT_FPS)
+    if args.quality:
+        if choiced:=ALL_RESOLUTIONS.get(args.quality[0]):
+            CHOICED_RESOLUTION = choiced
     if args.download:
         getAndAnimateDay(date=args.download[0])
     if args.month:
