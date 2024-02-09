@@ -19,20 +19,17 @@ __author__ = "hwpoison"
 __description__ = """
 Obtener imagenes en infrarrojos del satelite metereologico GOES-16 \
 haciendo scrapping al sitio climasurgba.com.ar
-El formato de las fechas a especificar es del tipo AÑO/MES/DÍA
+El formato de las fechas a especificar sigue el formato AÑO/MES/DÍA
 """
 
 URL_BASE = "https://climasurgba.com.ar"
 URI_HISTORIAL = "/satelite/goes-topes-nubosos/historial/" 
 TODAY_DATE = datetime.now()
 TODAY_DATE_STR = TODAY_DATE.strftime("%Y/%m/%d")
-DEFAULT_FPS = 12 # default fps
+DEFAULT_FPS = 12
 SIMUL_LIMIT = 25
-ALL_RESOLUTIONS = {
-    'hd':(720, 1040),
-    'fullhd':(1488, 2064)
-}
-CHOICED_RESOLUTION = 'hd'
+DEFAULT_QUALITY = 9
+CROP_VIDEO = False
 
 if os.sys.platform == 'linux':
     FONT_DIR = '/usr/share/fonts/TTF/Inconsolata-Bold.ttf'
@@ -44,6 +41,7 @@ def parseDate(strdate):
                   .replace(':', '_')
 
 def view_file(file_name):
+    print("[+] Opening for view...")
     os.system(f'start {file_name}')
 
 # get url images of a specific day
@@ -51,10 +49,6 @@ def getImageUrls(date): # YYYY/M/D
     images = {}
     url = URL_BASE + URI_HISTORIAL + date
     print('[+]Scraping images from:', url)
-    headers = {
-            'Content-Type': 'text/html',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0'
-    }
     html = BeautifulSoup(requests.get(url, headers=default_headers).text, 'html.parser')
     for link in html.find_all(href=re.compile("satelite/historial")):
         if image_link:=link.get('href'):
@@ -65,8 +59,7 @@ def getImageUrls(date): # YYYY/M/D
     return date, images # returns date and images
 
 def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
-    date = images[0]
-    images = images[1]
+    date, images = images[0], images[1]
     pdate = parseDate(date)
     total_images = len(images)
     start = time.time()
@@ -81,7 +74,6 @@ def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
         download_url = URL_BASE + images[name]
         file_name = parseDate(name)
         full_path = f"{folder_name}/{file_name}.jpg"
-        print("Trying to download ", download_url)
         download_manager.addDownload(download_url, full_path)
 
     print('[+]Download started, waiting.')
@@ -92,7 +84,7 @@ def downloadImages(images, folder_name=None, simul_limit=False, delay=False):
     return True
 
 # animate images from folder
-def animate(folders, resolution, format='mp4', fps=DEFAULT_FPS):
+def generateAnimation(folders, format='mp4', fps=DEFAULT_FPS, crop=False):
     folders = [parseDate(fname) for fname in folders]
     if not [os.path.exists(f) for f in folders]:
         print('[-]Path does not exist')
@@ -102,13 +94,21 @@ def animate(folders, resolution, format='mp4', fps=DEFAULT_FPS):
         image_files.extend(paths)
     image_files.sort()
     print('[+]Loading and preparing images.')
-    images = []
+    animation_frames = []
     for image_file in image_files:
         if image_file.endswith('.jpg'):
             try:
                 #load and resize images
                 image_loaded = Image.open(image_file)
-                image_loaded = image_loaded.resize(ALL_RESOLUTIONS[resolution])
+                 
+                # Setting rectangle to cut an image (center)
+                if crop:
+                    left, right = 260, 1047
+                    top, bottom = 568, 942
+                    image_loaded = image_loaded.crop((left, top, right, bottom))
+                else:
+                    image_loaded = image_loaded.resize((1488, 2064))
+
                 #load font
                 font = ImageFont.truetype(FONT_DIR, 25)
                 draw = ImageDraw.Draw(image_loaded)
@@ -118,26 +118,30 @@ def animate(folders, resolution, format='mp4', fps=DEFAULT_FPS):
                 draw.rectangle(((0,0),(210, 40)), fill ="#000000", outline ="red") 
                 draw.text((10,0), date_text, (255,255,255), font=font)
                 #add 
-                images.append(image_loaded)
+                animation_frames.append(image_loaded)
             except Exception as error:
                 print('[x]Error to read ', image_file, error)
 
-    print(f'[+]{len(images)} frames.')
-    images.extend([images[-1] for i in range(fps*3)]) # add pause at the end
-    file_path = f'{folder}/video.{format}'
-    imageio.mimwrite(file_path , images, fps=fps)
+    print(f'[+]{len(animation_frames)} frames.')
+    animation_frames.extend([animation_frames[-1] for i in range(fps*3)]) # add pause at the end
+    if crop:
+        file_path = f'{folder}/video_cropped.{format}'
+    else:
+        file_path = f'{folder}/video.{format}'
+    print('[+]Generating the animation, please wait...')
+    imageio.mimwrite(file_path , animation_frames, fps=fps, quality=DEFAULT_QUALITY)
     print('[+]Animation generated in ', file_path)
     return file_path
 
 # download and animate a day
-def getAndAnimateDay(date=TODAY_DATE_STR , delay=False):
+def getAndAnimateDay(date=TODAY_DATE_STR , delay=False, crop=False):
     print('[+]Getting images of the actual day.')
     images = getImageUrls(date)
     if images:
         print('[+]Preparing for download.')
         download = downloadImages(images, simul_limit=SIMUL_LIMIT, delay=delay)
         print('[+]Downloaded, now generating animation.')
-        animation = animate([date], resolution=CHOICED_RESOLUTION, fps=DEFAULT_FPS);
+        animation = generateAnimation([date], fps=DEFAULT_FPS, crop=CROP_VIDEO);
         print("[+]Finished.")
         return animation
     else:
@@ -156,7 +160,7 @@ def getAndAnimateFullMonth(month, year=2021):
 
     folder_name = f'month_{month}_{year}'
     downloadImages((folder_name, month_images), simul_limit=SIMUL_LIMIT, delay=30)
-    animate(folder_name, fps=DEFAULT_FPS)
+    generateAnimation(folder_name, fps=DEFAULT_FPS)
 
 def getAndAnimateFromYesterday():
     images = {}
@@ -168,35 +172,36 @@ def getAndAnimateFromYesterday():
     images.update(getImageUrls(TODAY_DATE_STR)[1])
     # download
     folder_name = yesterday_str+'_to_'+TODAY_DATE_STR
-    print(images)
     downloadImages((folder_name, images), simul_limit=SIMUL_LIMIT)
     # animate
-    animation_path = animate([folder_name], fps=DEFAULT_FPS)
+    animation_path = generateAnimation([folder_name], fps=DEFAULT_FPS)
     return animation_path
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__description__)
     parser.add_argument('-t', '--today', help='Obtener y descargar imagenes del día.', action='store_true')
-    parser.add_argument('-fy', '--fromyesterday', help='Obtener y descargar imagenes Desde ayer hasta este momento.', action='store_true')
+    parser.add_argument('-sy', '--sinceyesterday', help='Obtener y descargar imagenes Desde ayer hasta este momento.', action='store_true')
     parser.add_argument('-a', '--animate', help='Generar animación de una carpeta especifica. ex= --animate 2021-03-14,2021-03-15', type=str, nargs=1)
-    parser.add_argument('-d', '--download', help='Descargar las imagenes de un día en especifico (AÑO/MES/DÍA).', type=str, nargs=1)
-    parser.add_argument('-m', '--month', help='Descarga las imagenes de un mes entero en especifico.', type=int, nargs=1)
+    parser.add_argument('-d', '--download', help='Descargar y anima las imagenes de un día en especifico (AÑO/MES/DÍA).', type=str, nargs=1)
+    parser.add_argument('-m', '--month', help='Descarga y anima las imagenes de un mes entero en especifico.', type=int, nargs=1)
     parser.add_argument('--fps', help='Especificar los fps de la animación.', type=int, nargs=1)
-    parser.add_argument('-o', '--visualize', help='visualiza el video luego de generarlo.', action='store_true')
-    parser.add_argument('-q', '--quality', help='Resolución de animación. (hd, fullhd)', type=str, nargs=1)
+    parser.add_argument('-v', '--visualize', help='Visualizar la animación luego de terminar de generarla.', action='store_true')
+    parser.add_argument('-q', '--quality', help='Calidad de animación. (1-10 default=9)', type=int, nargs=1)
+    parser.add_argument('-c', '--crop', help='Crop the image center', action='store_true')
     args = parser.parse_args()
 
     if args.fps:
         DEFAULT_FPS = args.fps[0]
+    if args.crop:
+        CROP_VIDEO = True
     if args.today:
         animation_path = getAndAnimateDay()
-    if args.fromyesterday:
+    if args.sinceyesterday:
         animation_path = getAndAnimateFromYesterday()
     if args.animate:
-        animation_path = animate(args.animate[0].split(','), fps=DEFAULT_FPS)
+        animation_path = generateAnimation(args.animate[0].split(','), fps=DEFAULT_FPS)
     if args.quality:
-        if choiced:=ALL_RESOLUTIONS.get(args.quality[0]):
-            CHOICED_RESOLUTION = choiced
+        quality = args.quality[0]
     if args.download:
         getAndAnimateDay(date=args.download[0])
     if args.month:
@@ -205,3 +210,6 @@ if __name__ == '__main__':
         if animation_path:
             print('[+]Opening generated video.')
             view_file(animation_path)
+    
+    if not any(vars(args).values()):
+        parser.print_help()
