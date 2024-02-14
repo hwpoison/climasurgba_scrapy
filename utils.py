@@ -72,7 +72,7 @@ class DownloadManager(ThreadPoolManager):
 				if chunk:
 					f.write(chunk)
 		self.total_downloaded+=1
-		print(f'[+]{location} downloaded. {self.total_downloaded} of {self.total_files} ({self.omitteds} omitteds)')
+		print(f'[+] "{location}" downloaded. {self.total_downloaded} of {self.total_files} ({self.omitteds} omitteds)')
 		return True
 
 	def addDownload(self, link, location):
